@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react"
 import HabitForm from "./components/HabitForm"
 import HabitList from "./components/HabitList"
+import Stats from "./components/Stats"
+import History from "./components/History"
 import {
   fetchHabits,
   createHabit,
@@ -22,10 +24,17 @@ function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(!!getToken())
   const [editingHabitId, setEditingHabitId] = useState(null)
   const [selectedFilterDay, setSelectedFilterDay] = useState("")
+  const [currentPage, setCurrentPage] = useState("habits")
 
   const today = new Date()
     .toLocaleDateString("fr-FR", { weekday: "long" })
     .toLowerCase()
+
+  const todayDate = new Date().toISOString().split("T")[0]
+
+  const [currentDate, setCurrentDate] = useState(() =>
+    new Date().toISOString().split("T")[0]
+  )
 
   const weekDays = [
     "lundi",
@@ -41,7 +50,7 @@ function App() {
     if (isLoggedIn) {
       loadHabits()
     }
-  }, [isLoggedIn])
+  }, [isLoggedIn, currentDate])
 
   function handleEditHabit(habit) {
     setNewHabit(habit.title)
@@ -73,7 +82,7 @@ function App() {
 
  async function loadHabits() {
     try {
-      const data = await fetchHabits()
+      const data = await fetchHabits(currentDate)
       setHabits(Array.isArray(data) ? data : [])
       setErrorMessage("")
     } catch (error) {
@@ -151,27 +160,35 @@ function App() {
   }
 
  async function handleDeleteHabit(idToDelete) {
-  try {
-    await deleteHabit(idToDelete)
-    await loadHabits()
+    try {
+      await deleteHabit(idToDelete)
+      await loadHabits()
 
-    if (editingHabitId === idToDelete) {
-      setNewHabit("")
-      setSelectedDays([])
-      setEditingHabitId(null)
+      if (editingHabitId === idToDelete) {
+        setNewHabit("")
+        setSelectedDays([])
+        setEditingHabitId(null)
+      }
+
+      setErrorMessage("")
+    } catch (error) {
+      setErrorMessage("Impossible de supprimer l’habitude.")
+      console.error(error)
     }
-
-    setErrorMessage("")
-  } catch (error) {
-    setErrorMessage("Impossible de supprimer l’habitude.")
-    console.error(error)
   }
-}
   
   async function handleToggleHabit(idToToggle) {
     try {
-      await toggleHabit(idToToggle)
-      await loadHabits()
+      const data = await toggleHabit(idToToggle, currentDate)
+
+      setHabits((currentHabits) =>
+        currentHabits.map((habit) =>
+          habit.id === idToToggle
+            ? { ...habit, done: data.habit.done }
+            : habit
+        )
+      )
+
       setErrorMessage("")
     } catch (error) {
       setErrorMessage("Impossible de modifier l’habitude.")
@@ -186,8 +203,29 @@ function App() {
   }
 
   return habit.days.includes(day)
-}
+  }
 
+  function getDateForWeekDay(day) {
+    const translations = {
+      lundi: 1,
+      mardi: 2,
+      mercredi: 3,
+      jeudi: 4,
+      vendredi: 5,
+      samedi: 6,
+      dimanche: 0,
+    }
+
+    const todayDateObject = new Date()
+    const currentDay = todayDateObject.getDay()
+    const targetDay = translations[day]
+
+    const difference = targetDay - currentDay
+
+    todayDateObject.setDate(todayDateObject.getDate() + difference)
+
+    return todayDateObject.toISOString().split("T")[0]
+  }
   const filteredHabits = Array.isArray(habits)
     ? habits.filter((habit) => {
         if (filter === "all") {
@@ -214,8 +252,15 @@ function App() {
       })
     : []
 
-    const completedHabits = filteredHabits.filter((habit) => habit.done).length
-    const totalHabits = filteredHabits.length
+  const todayHabits = habits.filter((habit) =>
+    isHabitPlannedForDay(habit, today)
+  )
+
+  const completedTodayHabits = todayHabits.filter((habit) => habit.done).length
+  const totalTodayHabits = todayHabits.length
+
+  const completedHabits = filteredHabits.filter((habit) => habit.done).length
+  const totalHabits = filteredHabits.length
 
     return (
     <main className="app">
@@ -230,8 +275,8 @@ function App() {
               <div>
                 <p className="today-label">Aujourd’hui : {today}</p>
                 <p className="habit-counter">
-                  {completedHabits} habitude{completedHabits > 1 ? "s" : ""} terminée
-                  {completedHabits > 1 ? "s" : ""} sur {totalHabits}
+                  {completedTodayHabits} habitude{completedTodayHabits > 1 ? "s" : ""} terminée
+                  {completedTodayHabits > 1 ? "s" : ""} sur {totalTodayHabits}
                 </p>
               </div>
 
@@ -240,11 +285,47 @@ function App() {
               </button>
             </div>
 
+            <div className="page-tabs">
+              <button
+                className={currentPage === "habits" ? "btn btn-filter active" : "btn btn-filter"}
+                onClick={() => setCurrentPage("habits")}
+              >
+                Habitudes
+              </button>
+
+              <button
+                className={currentPage === "stats" ? "btn btn-filter active" : "btn btn-filter"}
+                onClick={() => setCurrentPage("stats")}
+              >
+                Stats
+              </button>
+
+              <button
+                className={currentPage === "history" ? "btn btn-filter active" : "btn btn-filter"}
+                onClick={() => setCurrentPage("history")}
+              >
+                Historique
+              </button>
+            </div>
+
+            {currentPage === "stats" && (
+              <Stats
+                totalTodayHabits={totalTodayHabits}
+                completedTodayHabits={completedTodayHabits}
+              />
+            )}
+
+            {currentPage === "history" && <History />}
+
+            {currentPage === "habits" && (
+              <>
+
             <div className="filters">
               <button
                 className={filter === "today" ? "btn btn-filter active" : "btn btn-filter"}
                 onClick={() => {setFilter("today") 
                   setSelectedFilterDay("")
+                  setCurrentDate(todayDate)
                 }}
               >
                 Aujourd’hui
@@ -287,6 +368,7 @@ function App() {
                   onClick={() => {
                     setFilter("day")
                     setSelectedFilterDay(day)
+                    setCurrentDate(getDateForWeekDay(day))
                   }}
                 >
                   {day}
@@ -315,6 +397,8 @@ function App() {
             />
           </>
         )}
+      </>
+    )}
       </div>
     </main>
   )

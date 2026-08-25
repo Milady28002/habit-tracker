@@ -13,8 +13,8 @@ function getHeaders(withJson = true) {
   return headers
 }
 
-export async function fetchHabits() {
-  const response = await fetch(`${API_URL}/habits`, {
+export async function fetchHabits(date) {
+  const response = await fetch(`${API_URL}/habits?date=${date}`, {
     method: "GET",
     headers: getHeaders(false),
   })
@@ -40,8 +40,8 @@ export async function createHabit(habitData) {
   return response.json()
 }
 
-export async function toggleHabit(id) {
-  const response = await fetch(`${API_URL}/habits/${id}/toggle`, {
+export async function toggleHabit(id, date) {
+  const response = await fetch(`${API_URL}/habits/${id}/toggle?date=${date}`, {
     method: "PATCH",
     headers: getHeaders(false),
   })
